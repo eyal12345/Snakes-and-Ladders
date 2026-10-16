@@ -62,6 +62,8 @@ class Board:
             self.check_square(tail)
             if tail >= head:
                 raise InvalidBoardError(f"Snake {head}->{tail} must go down.")
+            if tail == self.FIRST_SQUARE:
+                raise InvalidBoardError(f"Snake {head}->{tail} cannot slide down to the first square.")
 
         for bottom, top in self._ladders.items():
             self.check_square(bottom)
