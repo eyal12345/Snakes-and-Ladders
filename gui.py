@@ -861,7 +861,7 @@ class SnakesAndLaddersApp:
                      state="normal" if used else "disabled").grid(row=row, column=0)
             if used:
                 entry = tk.Entry(self._colors_frame, textvariable=self._name_vars[row], width=15)
-                menu = tk.OptionMenu(self._colors_frame, self._color_vars[row], *Game.COLORS)
+                menu = tk.OptionMenu(self._colors_frame, self._color_vars[row], *sorted(Game.COLORS))
                 self._name_entries.append(entry)
                 self._color_menus.append(menu)
             else:
