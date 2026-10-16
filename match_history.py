@@ -76,10 +76,9 @@ class MatchHistory:
         return saved
 
     def all_maps(self):
-        """Return the saved maps of every difficulty level together, newest first."""
-        saved = [m for level in Difficulty for m in self.maps(level)]
-        saved.sort(key=lambda m: m.created, reverse=True)
-        return saved
+        """Return the saved maps of every difficulty level, grouped by level (easiest first),
+        newest first within each level."""
+        return [m for level in Difficulty for m in self.maps(level)]
 
     def contains(self, difficulty, map_id):
         return map_id in self._read(difficulty)
