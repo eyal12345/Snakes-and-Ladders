@@ -37,6 +37,7 @@ class Game:
         "Purple": "#8e24aa",
         "Orange": "#fb8c00",
         "Pink": "#f06292",
+        "Sky": "#4fc3f7",
     }
 
     def __init__(self, num_players, board=None, dice=None, player_names=None,
