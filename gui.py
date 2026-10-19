@@ -1122,11 +1122,14 @@ class SnakesAndLaddersApp:
 
     def _refresh_player_panel(self):
         steps = {player: 0 for player in self._game.players}
+        tosses = dict(steps)
         for result in self._game.history:
             steps[result.player] += result.steps
+            tosses[result.player] += 1
         for label, player in zip(self._player_labels, self._game.turn_order):
-            count = steps[player]
-            label.config(text=f"{player.name}: {count} step{'' if count == 1 else 's'}")
+            count, rolls = steps[player], tosses[player]
+            label.config(text=f"{player.name}: {count} step{'' if count == 1 else 's'} | "
+                              f"{rolls} toss{'' if rolls == 1 else 'es'}")
 
     # ================================================================== geometry
     def _square_bounds(self, square):
