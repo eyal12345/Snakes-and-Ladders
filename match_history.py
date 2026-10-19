@@ -16,7 +16,7 @@ from exceptions import InvalidBoardError, MatchHistoryError
 @dataclass(frozen=True)
 class Record:
     steps: int        # fewest steps a winner needed on the map
-    holder: str = ""  # multiplayer only: "You" (the first player), "Rival" or "You/Rival"
+    holder: str = ""  # "You" (the first player), "Rival" or "You/Rival"
     tosses: Optional[int] = None  # dice tosses of the record's winner (None for older records)
 
 
@@ -131,7 +131,7 @@ class MatchHistory:
         """Store a winner's step and toss counts if they beat the map's record of that kind.
 
         Fewer steps make a new record. Equaling the steps keeps the fewer tosses, and with a
-        holder (multiplayer), equaling the record set by the other side makes it shared
+        holder, equaling the record set by the other side makes it shared
         ("You/Rival"). Returns True when the record changed.
         """
         entries = self._read(difficulty)
@@ -156,16 +156,6 @@ class MatchHistory:
         records[kind] = {"steps": steps, "tosses": tosses}
         if holder:
             records[kind]["holder"] = holder
-        self._write(difficulty, entries, map_id)
-        return True
-
-    def clear_record(self, difficulty, map_id, kind):
-        """Reset the map's record of that kind to undetermined. Returns True if there was one."""
-        entries = self._read(difficulty)
-        entry = entries.get(map_id)
-        if not isinstance(entry, dict) or self._record_of(entry, kind) is None:
-            return False
-        del entry[self.RECORDS_KEY][kind]
         self._write(difficulty, entries, map_id)
         return True
 

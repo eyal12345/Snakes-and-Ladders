@@ -666,10 +666,9 @@ class SnakesAndLaddersApp:
     def _save_record(self, winner):
         """Update this map's record (of the current mode's kind) after a win.
 
-        In singleplayer the record belongs to the human player only: their win keeps it (or
-        lowers it), while an AI rival's win resets it to undetermined. In multiplayer any
-        player's win can set it; the first player counts as "You", the others as "Rival", and
-        a record reached by both is "You/Rival".
+        Both modes follow the same rules: any player's win can set it; the first player (the
+        human player in singleplayer) counts as "You", the others (the AI rivals in
+        singleplayer) as "Rival", and a record reached by both is "You/Rival".
         """
         turns = [r for r in self._game.history if r.player is winner]
         steps, tosses = sum(r.steps for r in turns), len(turns)
@@ -678,20 +677,14 @@ class SnakesAndLaddersApp:
             self._save_current_map()
         try:
             kind = self._record_kind()
-            if winner.is_computer:
-                changed = self._match_history.clear_record(level, self._map_id, kind)
-                message = f"Record for match {self._map_id} reset: an AI rival won"
-            else:
-                holder = ""
-                if kind == MatchHistory.MULTI:
-                    first = winner is self._game.players[0]
-                    holder = MatchHistory.YOU if first else MatchHistory.RIVAL
-                changed = self._match_history.update_record(level, self._map_id, kind, steps,
-                                                            tosses, holder)
-                record = self._match_history.record(level, self._map_id, kind)
-                verb = "Record matched" if record.holder == MatchHistory.SHARED else "New record"
-                message = (f"{verb} for match {self._map_id}: {self._record_text(record, '')}, "
-                           f"{self._tosses_text(record)} tosses")
+            first = winner is self._game.players[0]
+            holder = MatchHistory.YOU if first else MatchHistory.RIVAL
+            changed = self._match_history.update_record(level, self._map_id, kind, steps,
+                                                        tosses, holder)
+            record = self._match_history.record(level, self._map_id, kind)
+            verb = "Record matched" if record.holder == MatchHistory.SHARED else "New record"
+            message = (f"{verb} for match {self._map_id}: {self._record_text(record, '')}, "
+                       f"{self._tosses_text(record)} tosses")
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
@@ -772,8 +765,8 @@ class SnakesAndLaddersApp:
             record = saved.single_record if single else saved.multi_record
             if record is None:
                 return [("-", False)] * 3
-            # Only the human player holds a singleplayer record (an AI win resets it).
-            holder = MatchHistory.YOU if single else record.holder or "-"
+            # Singleplayer records saved before they had a holder were always the human's.
+            holder = record.holder or (MatchHistory.YOU if single else "-")
             fewest_steps = self._is_perfect(record, saved.board, saved.difficulty)
             fewest_tosses = self._is_fewest_tosses(record, saved.board, saved.difficulty)
             # The holder is gold too when both the steps and the tosses are the best possible.
