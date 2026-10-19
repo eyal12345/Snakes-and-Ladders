@@ -668,7 +668,8 @@ class SnakesAndLaddersApp:
 
         Both modes follow the same rules: any player's win can set it; the first player (the
         human player in singleplayer) counts as "You", the others (the AI rivals in
-        singleplayer) as "Rival", and a record reached by both is "You/Rival".
+        singleplayer) as "Rival", and a record reached by both is "You/Rival". The steps and
+        tosses records are kept apart, each with its own holder.
         """
         turns = [r for r in self._game.history if r.player is winner]
         steps, tosses = sum(r.steps for r in turns), len(turns)
@@ -682,9 +683,8 @@ class SnakesAndLaddersApp:
             changed = self._match_history.update_record(level, self._map_id, kind, steps,
                                                         tosses, holder)
             record = self._match_history.record(level, self._map_id, kind)
-            verb = "Record matched" if record.holder == MatchHistory.SHARED else "New record"
-            message = (f"{verb} for match {self._map_id}: {self._record_text(record, '')}, "
-                       f"{self._tosses_text(record)} tosses")
+            message = (f"Records for match {self._map_id}: {self._record_text(record, '')}, "
+                       f"{self._tosses_text(record)} tosses ({record.tosses_holder})")
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
@@ -729,9 +729,10 @@ class SnakesAndLaddersApp:
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
         row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}"
-        widths = (11, 8, 10)  # Record, Tosses, Broken By
+        widths = (11, 11, 8, 10)  # Record, Broken By, Tosses, Broken By
         header = row_format.format("", "ID", "Level", "Created", "Layout")
-        header += f"{'Record':<{widths[0]}}{'Tosses':<{widths[1]}}Broken By"
+        header += f"{'Record':<{widths[0]}}{'Broken By':<{widths[1]}}"
+        header += f"{'Tosses':<{widths[2]}}Broken By"
         tk.Label(dialog, text=header,
                  font=("Consolas", 10, "bold"), padx=11, anchor="w").pack(fill="x", pady=(6, 0))
 
@@ -761,18 +762,20 @@ class SnakesAndLaddersApp:
             record_boxes.append(box)
 
         def record_cells(saved):
-            """(text, gold) for the Record, Tosses and Broken By columns of a saved map."""
+            """(text, gold) for the Record, Broken By, Tosses and Broken By columns of a map."""
             record = saved.single_record if single else saved.multi_record
             if record is None:
-                return [("-", False)] * 3
+                return [("-", False)] * len(widths)
             # Singleplayer records saved before they had a holder were always the human's.
-            holder = record.holder or (MatchHistory.YOU if single else "-")
+            unknown = MatchHistory.YOU if single else "-"
             fewest_steps = self._is_perfect(record, saved.board, saved.difficulty)
             fewest_tosses = self._is_fewest_tosses(record, saved.board, saved.difficulty)
-            # The holder is gold too when both the steps and the tosses are the best possible.
+            # The holders are gold too when both the steps and the tosses are the best possible.
+            both = fewest_steps and fewest_tosses
             return [(f"{record.steps} steps", fewest_steps),
+                    (record.holder or unknown, both),
                     (self._tosses_text(record), fewest_tosses),
-                    (holder, fewest_steps and fewest_tosses)]
+                    (record.tosses_holder or unknown, both)]
         scrollbar.config(command=listbox.yview)
 
         shown = []

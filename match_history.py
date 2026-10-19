@@ -16,8 +16,9 @@ from exceptions import InvalidBoardError, MatchHistoryError
 @dataclass(frozen=True)
 class Record:
     steps: int        # fewest steps a winner needed on the map
-    holder: str = ""  # "You" (the first player), "Rival" or "You/Rival"
-    tosses: Optional[int] = None  # dice tosses of the record's winner (None for older records)
+    holder: str = ""  # who set the steps record: "You" (the first player), "Rival" or "You/Rival"
+    tosses: Optional[int] = None  # fewest dice tosses a winner needed (kept on its own)
+    tosses_holder: str = ""       # who set the tosses record
 
 
 @dataclass(frozen=True)
@@ -128,36 +129,42 @@ class MatchHistory:
         self._write(difficulty, entries, map_id)
 
     def update_record(self, difficulty, map_id, kind, steps, tosses, holder=""):
-        """Store a winner's step and toss counts if they beat the map's record of that kind.
+        """Store a winner's step and toss counts where they beat the map's records of that kind.
 
-        Fewer steps make a new record. Equaling the steps keeps the fewer tosses, and with a
-        holder, equaling the record set by the other side makes it shared
-        ("You/Rival"). Returns True when the record changed.
+        The steps record and the tosses record are kept apart: each one changes only when
+        the win needed fewer of its own count. With a holder, equaling a record set by the
+        other side makes it shared ("You/Rival"). Returns True when either record changed.
         """
         entries = self._read(difficulty)
         entry = entries.get(map_id)
         if not isinstance(entry, dict):
             return False
         record = self._record_of(entry, kind)
-        if record is not None and record.steps < steps:
-            return False
-        if record is not None and record.steps == steps:
-            if holder and record.holder not in (holder, self.SHARED):
-                holder = self.SHARED
-            else:
-                holder = record.holder
-            if record.tosses is not None:
-                tosses = min(tosses, record.tosses)
-            if (holder, tosses) == (record.holder, record.tosses):
+        if record is None:
+            new = Record(steps, holder, tosses, holder)
+        else:
+            new_steps, steps_holder = self._best(record.steps, record.holder, steps, holder)
+            new_tosses, tosses_holder = self._best(record.tosses, record.tosses_holder,
+                                                   tosses, holder)
+            new = Record(new_steps, steps_holder, new_tosses, tosses_holder)
+            if new == record:
                 return False
         records = entry.get(self.RECORDS_KEY)
         if not isinstance(records, dict):
             records = entry[self.RECORDS_KEY] = {}
-        records[kind] = {"steps": steps, "tosses": tosses}
-        if holder:
-            records[kind]["holder"] = holder
+        records[kind] = {"steps": new.steps, "holder": new.holder,
+                         "tosses": new.tosses, "tosses_holder": new.tosses_holder}
         self._write(difficulty, entries, map_id)
         return True
+
+    @classmethod
+    def _best(cls, old, old_holder, value, holder):
+        """The (value, holder) of a record after a win needing `value`; lower is better."""
+        if old is None or value < old:
+            return value, holder
+        if value == old and holder and old_holder not in (holder, cls.SHARED):
+            return old, cls.SHARED
+        return old, old_holder
 
     @classmethod
     def _record_of(cls, entry, kind):
@@ -172,7 +179,11 @@ class MatchHistory:
         tosses = record.get("tosses")
         if not isinstance(tosses, int) or isinstance(tosses, bool):
             tosses = None
-        return Record(steps, holder if holder in cls.HOLDERS else "", tosses)
+        holder = holder if holder in cls.HOLDERS else ""
+        # Records saved before the two were kept apart: the tosses came with the steps record.
+        tosses_holder = record.get("tosses_holder", holder)
+        return Record(steps, holder, tosses,
+                      tosses_holder if tosses_holder in cls.HOLDERS else "")
 
     # ------------------------------------------------------------------ files
     def _path(self, difficulty):
