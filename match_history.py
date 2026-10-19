@@ -16,7 +16,7 @@ from exceptions import InvalidBoardError, MatchHistoryError
 @dataclass(frozen=True)
 class Record:
     steps: int        # fewest steps a winner needed on the map
-    holder: str = ""  # multiplayer only: "You" (the first player) or "Rival"
+    holder: str = ""  # multiplayer only: "You" (the first player), "Rival" or "You/Rival"
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,10 @@ class MatchHistory:
     # Record kinds: singleplayer and multiplayer matches keep separate records.
     SINGLE = "single"
     MULTI = "multi"
-    HOLDERS = ("You", "Rival")
+    YOU = "You"
+    RIVAL = "Rival"
+    SHARED = "You/Rival"  # both reached the same record
+    HOLDERS = (YOU, RIVAL, SHARED)
     # Records live under RECORDS_KEY. Older versions kept a single record under the other
     # keys; those are ignored (and dropped on the next write), so every map starts over
     # as Undetermined.
@@ -126,14 +129,18 @@ class MatchHistory:
     def update_record(self, difficulty, map_id, kind, steps, holder=""):
         """Store a winner's step count if it beats the map's record of that kind.
 
-        Returns True when a new record was set (including the first win of that kind).
+        With a holder (multiplayer), equaling the record set by the other side makes it
+        shared ("You/Rival"). Returns True when the record changed.
         """
         entries = self._read(difficulty)
         entry = entries.get(map_id)
         if not isinstance(entry, dict):
             return False
         record = self._record_of(entry, kind)
-        if record is not None and record.steps <= steps:
+        tied = record is not None and record.steps == steps
+        if tied and holder and record.holder not in (holder, self.SHARED):
+            holder = self.SHARED
+        elif record is not None and record.steps <= steps:
             return False
         records = entry.get(self.RECORDS_KEY)
         if not isinstance(records, dict):

@@ -9,7 +9,7 @@ from exceptions import GameOverError, MatchHistoryError, SnakesAndLaddersError
 from computer_player import ComputerPlayer
 from difficulty import Difficulty
 from game import Game
-from match_history import MatchHistory, Record
+from match_history import MatchHistory
 from start_toss import StartToss
 
 
@@ -658,7 +658,8 @@ class SnakesAndLaddersApp:
 
         In singleplayer the record belongs to the human player only: their win keeps it (or
         lowers it), while an AI rival's win resets it to undetermined. In multiplayer any
-        player's win can set it; the first player counts as "You", the others as "Rival".
+        player's win can set it; the first player counts as "You", the others as "Rival", and
+        a record reached by both is "You/Rival".
         """
         steps = sum(r.steps for r in self._game.history if r.player is winner)
         level = self._game.difficulty
@@ -672,11 +673,13 @@ class SnakesAndLaddersApp:
             else:
                 holder = ""
                 if kind == MatchHistory.MULTI:
-                    holder = "You" if winner is self._game.players[0] else "Rival"
+                    first = winner is self._game.players[0]
+                    holder = MatchHistory.YOU if first else MatchHistory.RIVAL
                 changed = self._match_history.update_record(level, self._map_id, kind, steps,
                                                             holder)
-                record = self._record_text(Record(steps, holder), "")
-                message = f"New record for match {self._map_id}: {record}"
+                record = self._match_history.record(level, self._map_id, kind)
+                verb = "Record matched" if record.holder == MatchHistory.SHARED else "New record"
+                message = f"{verb} for match {self._map_id}: {self._record_text(record, '')}"
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
