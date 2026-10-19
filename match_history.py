@@ -17,6 +17,7 @@ from exceptions import InvalidBoardError, MatchHistoryError
 class Record:
     steps: int        # fewest steps a winner needed on the map
     holder: str = ""  # multiplayer only: "You" (the first player), "Rival" or "You/Rival"
+    tosses: Optional[int] = None  # dice tosses of the record's winner (None for older records)
 
 
 @dataclass(frozen=True)
@@ -126,26 +127,35 @@ class MatchHistory:
         }
         self._write(difficulty, entries, map_id)
 
-    def update_record(self, difficulty, map_id, kind, steps, holder=""):
-        """Store a winner's step count if it beats the map's record of that kind.
+    def update_record(self, difficulty, map_id, kind, steps, tosses, holder=""):
+        """Store a winner's step and toss counts if they beat the map's record of that kind.
 
-        With a holder (multiplayer), equaling the record set by the other side makes it
-        shared ("You/Rival"). Returns True when the record changed.
+        Fewer steps make a new record. Equaling the steps keeps the fewer tosses, and with a
+        holder (multiplayer), equaling the record set by the other side makes it shared
+        ("You/Rival"). Returns True when the record changed.
         """
         entries = self._read(difficulty)
         entry = entries.get(map_id)
         if not isinstance(entry, dict):
             return False
         record = self._record_of(entry, kind)
-        tied = record is not None and record.steps == steps
-        if tied and holder and record.holder not in (holder, self.SHARED):
-            holder = self.SHARED
-        elif record is not None and record.steps <= steps:
+        if record is not None and record.steps < steps:
             return False
+        if record is not None and record.steps == steps:
+            if holder and record.holder not in (holder, self.SHARED):
+                holder = self.SHARED
+            else:
+                holder = record.holder
+            if record.tosses is not None:
+                tosses = min(tosses, record.tosses)
+            if (holder, tosses) == (record.holder, record.tosses):
+                return False
         records = entry.get(self.RECORDS_KEY)
         if not isinstance(records, dict):
             records = entry[self.RECORDS_KEY] = {}
-        records[kind] = {"steps": steps, "holder": holder} if holder else {"steps": steps}
+        records[kind] = {"steps": steps, "tosses": tosses}
+        if holder:
+            records[kind]["holder"] = holder
         self._write(difficulty, entries, map_id)
         return True
 
@@ -169,7 +179,10 @@ class MatchHistory:
         steps, holder = record.get("steps"), record.get("holder", "")
         if not isinstance(steps, int) or isinstance(steps, bool):
             return None
-        return Record(steps, holder if holder in cls.HOLDERS else "")
+        tosses = record.get("tosses")
+        if not isinstance(tosses, int) or isinstance(tosses, bool):
+            tosses = None
+        return Record(steps, holder if holder in cls.HOLDERS else "", tosses)
 
     # ------------------------------------------------------------------ files
     def _path(self, difficulty):

@@ -120,6 +120,32 @@ class Game:
                     heapq.heappush(queue, (cost + steps, end))
         return None  # unreachable (cannot happen on a valid board)
 
+    @staticmethod
+    def min_tosses(board, difficulty, sides=6):
+        """Fewest dice tosses (turns) that can win on this board, under the level's finish rule."""
+        size = board.size
+        seen = {0}
+        frontier = [0]
+        tosses = 0
+        while frontier:
+            tosses += 1
+            reached = []
+            for square in frontier:
+                for roll in range(1, sides + 1):
+                    target = square + roll
+                    if target > size:
+                        if difficulty.finish_rule == FINISH_EXACT:
+                            continue  # the token stays put: no progress
+                        target = size if difficulty.finish_rule == FINISH_ANY else 2 * size - target
+                    end = board.destination(target)[0]
+                    if end == size:
+                        return tosses
+                    if end not in seen:
+                        seen.add(end)
+                        reached.append(end)
+            frontier = reached
+        return None  # unreachable (cannot happen on a valid board)
+
     # ------------------------------------------------------------------ names
     @classmethod
     def validate_names(cls, names):

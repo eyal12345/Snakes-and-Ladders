@@ -645,6 +645,16 @@ class SnakesAndLaddersApp:
         """True when a record equals the fewest steps the board allows."""
         return record is not None and record.steps == Game.min_steps(board, level)
 
+    @staticmethod
+    def _tosses_text(record):
+        return "-" if record is None or record.tosses is None else str(record.tosses)
+
+    @staticmethod
+    def _is_fewest_tosses(record, board, level):
+        """True when a record's tosses equal the fewest tosses the board allows."""
+        return (record is not None and record.tosses is not None
+                and record.tosses == Game.min_tosses(board, level))
+
     def _save_current_map(self):
         try:
             self._match_history.save(self._game.difficulty, self._map_id, self._game.board)
@@ -661,7 +671,8 @@ class SnakesAndLaddersApp:
         player's win can set it; the first player counts as "You", the others as "Rival", and
         a record reached by both is "You/Rival".
         """
-        steps = sum(r.steps for r in self._game.history if r.player is winner)
+        turns = [r for r in self._game.history if r.player is winner]
+        steps, tosses = sum(r.steps for r in turns), len(turns)
         level = self._game.difficulty
         if not self._match_history.contains(level, self._map_id):
             self._save_current_map()
@@ -676,10 +687,11 @@ class SnakesAndLaddersApp:
                     first = winner is self._game.players[0]
                     holder = MatchHistory.YOU if first else MatchHistory.RIVAL
                 changed = self._match_history.update_record(level, self._map_id, kind, steps,
-                                                            holder)
+                                                            tosses, holder)
                 record = self._match_history.record(level, self._map_id, kind)
                 verb = "Record matched" if record.holder == MatchHistory.SHARED else "New record"
-                message = f"{verb} for match {self._map_id}: {self._record_text(record, '')}"
+                message = (f"{verb} for match {self._map_id}: {self._record_text(record, '')}, "
+                           f"{self._tosses_text(record)} tosses")
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
@@ -717,9 +729,10 @@ class SnakesAndLaddersApp:
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
         row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}"
-        record_width = 23
+        record_width, tosses_width = 23, 8
         header = row_format.format("", "ID", "Level", "Created", "Layout")
-        header += f"{'Record (Singleplayer)':<{record_width}}Record (Multiplayer)"
+        header += f"{'Record (Singleplayer)':<{record_width}}{'Tosses':<{tosses_width}}"
+        header += f"{'Record (Multiplayer)':<{record_width}}Tosses"
         tk.Label(dialog, text=header,
                  font=("Consolas", 10, "bold"), padx=11, anchor="w").pack(fill="x", pady=(6, 0))
 
@@ -727,8 +740,8 @@ class SnakesAndLaddersApp:
         list_frame.pack(fill="both", expand=True)
         scrollbar = tk.Scrollbar(list_frame)
         scrollbar.pack(side="right", fill="y")
-        # Each Record column is its own listbox so a record can be colored on its own (gold
-        # when it is the best possible); they scroll and select together with the main one.
+        # Each Record and Tosses column is its own listbox so a value can be colored on its own
+        # (gold when it is the best possible); they scroll and select together with the main one.
         boxes = tk.Frame(list_frame, bd=1, relief="sunken")
         boxes.pack(side="left", fill="both", expand=True)
         box_style = {"height": 12, "font": ("Consolas", 10), "bd": 0, "highlightthickness": 0}
@@ -742,11 +755,21 @@ class SnakesAndLaddersApp:
                              yscrollcommand=on_scroll, **box_style)
         listbox.pack(side="left", fill="both", expand=True)
         record_boxes = []
-        for _kind in (MatchHistory.SINGLE, MatchHistory.MULTI):
-            box = tk.Listbox(boxes, width=record_width, activestyle="none", exportselection=False,
+        for width in (record_width, tosses_width) * 2:  # singleplayer, then multiplayer
+            box = tk.Listbox(boxes, width=width, activestyle="none", exportselection=False,
                              takefocus=0, **box_style)
             box.pack(side="left", fill="y")
             record_boxes.append(box)
+
+        def record_cells(saved):
+            """(text, gold) for each Record/Tosses column of a saved map."""
+            cells = []
+            for record in (saved.single_record, saved.multi_record):
+                cells.append((self._record_text(record, "-"),
+                              self._is_perfect(record, saved.board, saved.difficulty)))
+                cells.append((self._tosses_text(record),
+                              self._is_fewest_tosses(record, saved.board, saved.difficulty)))
+            return cells
         scrollbar.config(command=listbox.yview)
 
         shown = []
@@ -778,15 +801,16 @@ class SnakesAndLaddersApp:
                         "►" if current else "", saved.map_id, saved.difficulty.label,
                         saved.created, f"{layout:<7}(playing)" if current else layout
                     ))
-                    for box, record in zip(record_boxes, (saved.single_record, saved.multi_record)):
-                        box.insert(tk.END, self._record_text(record, "-"))
+                    cells = record_cells(saved)
+                    for box, (value, _gold) in zip(record_boxes, cells):
+                        box.insert(tk.END, value)
                     if current:
                         # The match being played cannot be chosen; it is only pointed out.
                         for box in (listbox, *record_boxes):
                             box.itemconfig(tk.END, bg="#c8e6c9", fg="#757575",
                                            selectbackground="#c8e6c9", selectforeground="#757575")
-                    for box, record in zip(record_boxes, (saved.single_record, saved.multi_record)):
-                        if self._is_perfect(record, saved.board, saved.difficulty):
+                    for box, (_value, gold) in zip(record_boxes, cells):
+                        if gold:
                             box.itemconfig(tk.END, fg=self.GOLD, selectforeground=self.GOLD_SELECTED)
             # Start on the first row other than the current match.
             last[0] = next((i for i in range(len(shown)) if not is_current(i)), None)
