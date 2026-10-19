@@ -9,7 +9,7 @@ from exceptions import GameOverError, MatchHistoryError, SnakesAndLaddersError
 from computer_player import ComputerPlayer
 from difficulty import Difficulty
 from game import Game
-from match_history import MatchHistory
+from match_history import MatchHistory, Record
 from start_toss import StartToss
 
 
@@ -621,12 +621,29 @@ class SnakesAndLaddersApp:
         saved = self._match_history.contains(level, self._map_id)
         note = "" if saved else "  (saved on first roll)"
         self._map_label.config(text=f"Match ID: {self._map_id}{note}")
-        record = self._match_history.record(level, self._map_id)
-        perfect = record is not None and record == Game.min_steps(self._game.board, level)
+        record = self._match_history.record(level, self._map_id, self._record_kind())
+        perfect = self._is_perfect(record, self._game.board, level)
         self._record_label.config(
-            text="Record: Undetermined" if record is None else f"Record: {record} steps",
+            text=f"Record: {self._record_text(record, 'Undetermined')}",
             fg=self.GOLD if perfect else self.RECORD_COLOR,
         )
+
+    def _record_kind(self):
+        """Singleplayer and multiplayer matches keep separate records."""
+        computers = self.MODES[self._game_mode][2]
+        return MatchHistory.SINGLE if computers else MatchHistory.MULTI
+
+    @staticmethod
+    def _record_text(record, undetermined):
+        if record is None:
+            return undetermined
+        text = f"{record.steps} steps"
+        return f"{text} ({record.holder})" if record.holder else text
+
+    @staticmethod
+    def _is_perfect(record, board, level):
+        """True when a record equals the fewest steps the board allows."""
+        return record is not None and record.steps == Game.min_steps(board, level)
 
     def _save_current_map(self):
         try:
@@ -637,23 +654,29 @@ class SnakesAndLaddersApp:
         self._show_map_id()
 
     def _save_record(self, winner):
-        """Update this map's record after a win.
+        """Update this map's record (of the current mode's kind) after a win.
 
         In singleplayer the record belongs to the human player only: their win keeps it (or
         lowers it), while an AI rival's win resets it to undetermined. In multiplayer any
-        player's win can set it.
+        player's win can set it; the first player counts as "You", the others as "Rival".
         """
         steps = sum(r.steps for r in self._game.history if r.player is winner)
         level = self._game.difficulty
         if not self._match_history.contains(level, self._map_id):
             self._save_current_map()
         try:
+            kind = self._record_kind()
             if winner.is_computer:
-                changed = self._match_history.clear_record(level, self._map_id)
+                changed = self._match_history.clear_record(level, self._map_id, kind)
                 message = f"Record for match {self._map_id} reset: an AI rival won"
             else:
-                changed = self._match_history.update_record(level, self._map_id, steps)
-                message = f"New record for match {self._map_id}: {steps} steps"
+                holder = ""
+                if kind == MatchHistory.MULTI:
+                    holder = "You" if winner is self._game.players[0] else "Rival"
+                changed = self._match_history.update_record(level, self._map_id, kind, steps,
+                                                            holder)
+                record = self._record_text(Record(steps, holder), "")
+                message = f"New record for match {self._map_id}: {record}"
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
@@ -691,29 +714,36 @@ class SnakesAndLaddersApp:
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
         row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}"
-        tk.Label(dialog, text=row_format.format("", "ID", "Level", "Created", "Layout") + "Record",
+        record_width = 23
+        header = row_format.format("", "ID", "Level", "Created", "Layout")
+        header += f"{'Record (Singleplayer)':<{record_width}}Record (Multiplayer)"
+        tk.Label(dialog, text=header,
                  font=("Consolas", 10, "bold"), padx=11, anchor="w").pack(fill="x", pady=(6, 0))
 
         list_frame = tk.Frame(dialog, padx=10, pady=2)
         list_frame.pack(fill="both", expand=True)
         scrollbar = tk.Scrollbar(list_frame)
         scrollbar.pack(side="right", fill="y")
-        # The Record column is its own listbox so a record can be colored on its own (gold
-        # when it is the best possible); it scrolls and selects together with the main one.
+        # Each Record column is its own listbox so a record can be colored on its own (gold
+        # when it is the best possible); they scroll and select together with the main one.
         boxes = tk.Frame(list_frame, bd=1, relief="sunken")
         boxes.pack(side="left", fill="both", expand=True)
         box_style = {"height": 12, "font": ("Consolas", 10), "bd": 0, "highlightthickness": 0}
 
         def on_scroll(first, last_visible):
             scrollbar.set(first, last_visible)
-            records.yview_moveto(first)
+            for box in record_boxes:
+                box.yview_moveto(first)
 
         listbox = tk.Listbox(boxes, width=len(row_format.format(*[""] * 5)), activestyle="dotbox",
                              yscrollcommand=on_scroll, **box_style)
         listbox.pack(side="left", fill="both", expand=True)
-        records = tk.Listbox(boxes, width=10, activestyle="none", exportselection=False,
+        record_boxes = []
+        for _kind in (MatchHistory.SINGLE, MatchHistory.MULTI):
+            box = tk.Listbox(boxes, width=record_width, activestyle="none", exportselection=False,
                              takefocus=0, **box_style)
-        records.pack(side="left", fill="y")
+            box.pack(side="left", fill="y")
+            record_boxes.append(box)
         scrollbar.config(command=listbox.yview)
 
         shown = []
@@ -724,36 +754,37 @@ class SnakesAndLaddersApp:
             return shown[index].map_id == current_id
 
         def sync_records(*_args):
-            records.selection_clear(0, tk.END)
-            for index in listbox.curselection():
-                records.selection_set(index)
-            records.yview_moveto(listbox.yview()[0])
+            for box in record_boxes:
+                box.selection_clear(0, tk.END)
+                for index in listbox.curselection():
+                    box.selection_set(index)
+                box.yview_moveto(listbox.yview()[0])
 
         def fill_list(*_args):
             text = query.get().strip().upper()
             listbox.delete(0, tk.END)
-            records.delete(0, tk.END)
+            for box in record_boxes:
+                box.delete(0, tk.END)
             shown.clear()
             for saved in maps:
                 if text in saved.map_id:
                     shown.append(saved)
                     layout = f"{len(saved.board.snakes)}S/{len(saved.board.ladders)}L"
                     current = saved.map_id == current_id
-                    record = "-" if saved.record_steps is None else f"{saved.record_steps} steps"
                     listbox.insert(tk.END, row_format.format(
                         "►" if current else "", saved.map_id, saved.difficulty.label,
                         saved.created, f"{layout:<7}(playing)" if current else layout
                     ))
-                    records.insert(tk.END, record)
+                    for box, record in zip(record_boxes, (saved.single_record, saved.multi_record)):
+                        box.insert(tk.END, self._record_text(record, "-"))
                     if current:
                         # The match being played cannot be chosen; it is only pointed out.
-                        for box in (listbox, records):
+                        for box in (listbox, *record_boxes):
                             box.itemconfig(tk.END, bg="#c8e6c9", fg="#757575",
                                            selectbackground="#c8e6c9", selectforeground="#757575")
-                    if saved.record_steps is not None and saved.record_steps == Game.min_steps(
-                        saved.board, saved.difficulty
-                    ):
-                        records.itemconfig(tk.END, fg=self.GOLD, selectforeground=self.GOLD_SELECTED)
+                    for box, record in zip(record_boxes, (saved.single_record, saved.multi_record)):
+                        if self._is_perfect(record, saved.board, saved.difficulty):
+                            box.itemconfig(tk.END, fg=self.GOLD, selectforeground=self.GOLD_SELECTED)
             # Start on the first row other than the current match.
             last[0] = next((i for i in range(len(shown)) if not is_current(i)), None)
             if last[0] is not None:
@@ -812,9 +843,9 @@ class SnakesAndLaddersApp:
         listbox.bind("<<ListboxSelect>>", lambda event: (on_select(event), sync_records()))
         listbox.bind("<ButtonPress-1>", lambda _event: clicked.__setitem__(0, True), add="+")
 
-        # Clicks and wheel turns on the Record column act on the main list.
+        # Clicks and wheel turns on the Record columns act on the main list.
         def record_click(event):
-            index = records.nearest(event.y)
+            index = event.widget.nearest(event.y)
             if 0 <= index < len(shown):
                 clicked[0] = True
                 listbox.selection_clear(0, tk.END)
@@ -828,10 +859,11 @@ class SnakesAndLaddersApp:
             listbox.yview_scroll(-1 if event.delta > 0 else 1, "units")
             return "break"
 
-        records.bind("<ButtonPress-1>", record_click)
-        records.bind("<B1-Motion>", lambda _event: "break")
-        records.bind("<Double-Button-1>", lambda event: (play(event), "break")[1])
-        records.bind("<MouseWheel>", record_wheel)
+        for box in record_boxes:
+            box.bind("<ButtonPress-1>", record_click)
+            box.bind("<B1-Motion>", lambda _event: "break")
+            box.bind("<Double-Button-1>", lambda event: (play(event), "break")[1])
+            box.bind("<MouseWheel>", record_wheel)
         fill_list()
 
         buttons = tk.Frame(dialog, pady=8)
