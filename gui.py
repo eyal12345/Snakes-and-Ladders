@@ -774,11 +774,12 @@ class SnakesAndLaddersApp:
                 return [("-", False)] * 3
             # Only the human player holds a singleplayer record (an AI win resets it).
             holder = MatchHistory.YOU if single else record.holder or "-"
-            return [(f"{record.steps} steps",
-                     self._is_perfect(record, saved.board, saved.difficulty)),
-                    (self._tosses_text(record),
-                     self._is_fewest_tosses(record, saved.board, saved.difficulty)),
-                    (holder, False)]
+            fewest_steps = self._is_perfect(record, saved.board, saved.difficulty)
+            fewest_tosses = self._is_fewest_tosses(record, saved.board, saved.difficulty)
+            # The holder is gold too when both the steps and the tosses are the best possible.
+            return [(f"{record.steps} steps", fewest_steps),
+                    (self._tosses_text(record), fewest_tosses),
+                    (holder, fewest_steps and fewest_tosses)]
         scrollbar.config(command=listbox.yview)
 
         shown = []
