@@ -631,12 +631,12 @@ class SnakesAndLaddersApp:
         if not self._match_history.contains(level, self._map_id):
             self._save_current_map()
         try:
-            new_record = self._match_history.update_record(level, self._map_id, steps, winner.name)
+            new_record = self._match_history.update_record(level, self._map_id, steps)
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
         if new_record:
-            self._write_log(f"New record for match {self._map_id}: {steps} steps by {winner.name}")
+            self._write_log(f"New record for match {self._map_id}: {steps} steps")
 
     def open_history(self):
         """Let the player pick a saved map of any difficulty level and play it again."""
@@ -675,7 +675,7 @@ class SnakesAndLaddersApp:
         list_frame.pack(fill="both", expand=True)
         scrollbar = tk.Scrollbar(list_frame)
         scrollbar.pack(side="right", fill="y")
-        listbox = tk.Listbox(list_frame, width=82, height=12, font=("Consolas", 10),
+        listbox = tk.Listbox(list_frame, width=72, height=12, font=("Consolas", 10),
                              yscrollcommand=scrollbar.set, activestyle="dotbox")
         listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=listbox.yview)
@@ -696,10 +696,7 @@ class SnakesAndLaddersApp:
                     shown.append(saved)
                     layout = f"{len(saved.board.snakes)}S/{len(saved.board.ladders)}L"
                     current = saved.map_id == current_id
-                    if saved.record_steps is None:
-                        record = "-"
-                    else:
-                        record = f"{saved.record_steps} ({saved.record_holder[:12]})"
+                    record = "-" if saved.record_steps is None else f"{saved.record_steps} steps"
                     listbox.insert(tk.END, row_format.format(
                         "►" if current else "", saved.map_id, saved.difficulty.label,
                         saved.created, f"{layout:<7}(playing)" if current else layout, record

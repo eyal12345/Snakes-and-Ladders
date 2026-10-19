@@ -20,7 +20,6 @@ class SavedMap:
     created: str  # "YYYY-MM-DD HH:MM:SS"
     difficulty: Difficulty
     record_steps: Optional[int] = None  # fewest steps any winner needed on this map
-    record_holder: str = ""             # name of the player who set that record
 
 
 class MatchHistory:
@@ -74,12 +73,8 @@ class MatchHistory:
                 )
             except (KeyError, TypeError, ValueError, AttributeError, InvalidBoardError):
                 continue  # skip damaged entries instead of failing the whole list
-            record = entry.get("record")
-            record_steps = record_holder = None
-            if isinstance(record, dict) and isinstance(record.get("steps"), int):
-                record_steps, record_holder = record["steps"], str(record.get("player", ""))
             saved.append(SavedMap(map_id, board, str(entry.get("created", "")), difficulty,
-                                  record_steps, record_holder or ""))
+                                  self._record_of(entry)))
         saved.sort(key=lambda m: m.created, reverse=True)
         return saved
 
@@ -105,7 +100,7 @@ class MatchHistory:
         }
         self._write(difficulty, entries, map_id)
 
-    def update_record(self, difficulty, map_id, steps, player_name):
+    def update_record(self, difficulty, map_id, steps):
         """Store a winner's step count if it beats the map's record.
 
         Returns True when a new record was set (including the map's first win).
@@ -114,16 +109,20 @@ class MatchHistory:
         entry = entries.get(map_id)
         if not isinstance(entry, dict):
             return False
-        record = entry.get("record")
-        if isinstance(record, dict) and isinstance(record.get("steps"), int)                 and record["steps"] <= steps:
+        record = self._record_of(entry)
+        if record is not None and record <= steps:
             return False
-        entry["record"] = {
-            "steps": steps,
-            "player": player_name,
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
+        entry["record"] = steps
         self._write(difficulty, entries, map_id)
         return True
+
+    @staticmethod
+    def _record_of(entry):
+        """The map's record step count, or None if it has never been won."""
+        record = entry.get("record")
+        if isinstance(record, dict):  # older entries also kept the player's name
+            record = record.get("steps")
+        return record if isinstance(record, int) and not isinstance(record, bool) else None
 
     # ------------------------------------------------------------------ files
     def _path(self, difficulty):
