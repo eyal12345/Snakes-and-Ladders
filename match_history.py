@@ -135,9 +135,9 @@ class MatchHistory:
 
         The steps record and the tosses record are kept apart: each one changes only when
         the win needed fewer of its own count. With a holder, equaling a record set by the
-        other side makes it shared ("You/Rival"). `players` is how many played the match; it
-        is kept with the steps record whenever a win sets a new one. Returns True when either
-        record changed.
+        other side makes it shared ("You/Rival"). `players` is how many played the match: a
+        new steps record takes this match's count (even if lower), and equaling the steps
+        record keeps the higher of the two counts. Returns True when either record changed.
         """
         entries = self._read(difficulty)
         entry = entries.get(map_id)
@@ -150,7 +150,12 @@ class MatchHistory:
             new_steps, steps_holder = self._best(record.steps, record.holder, steps, holder)
             new_tosses, tosses_holder = self._best(record.tosses, record.tosses_holder,
                                                    tosses, holder)
-            new_players = players if steps < record.steps else record.players
+            if steps < record.steps:
+                new_players = players
+            elif steps == record.steps:
+                new_players = max(players, record.players)
+            else:
+                new_players = record.players
             new = Record(new_steps, steps_holder, new_tosses, tosses_holder, new_players)
             if new == record:
                 return False
