@@ -637,18 +637,28 @@ class SnakesAndLaddersApp:
         self._show_map_id()
 
     def _save_record(self, winner):
-        """Keep the winner's step count as this map's record if it is the lowest so far."""
+        """Update this map's record after a win.
+
+        In singleplayer the record belongs to the human player only: their win keeps it (or
+        lowers it), while an AI rival's win resets it to undetermined. In multiplayer any
+        player's win can set it.
+        """
         steps = sum(r.steps for r in self._game.history if r.player is winner)
         level = self._game.difficulty
         if not self._match_history.contains(level, self._map_id):
             self._save_current_map()
         try:
-            new_record = self._match_history.update_record(level, self._map_id, steps)
+            if winner.is_computer:
+                changed = self._match_history.clear_record(level, self._map_id)
+                message = f"Record for match {self._map_id} reset: an AI rival won"
+            else:
+                changed = self._match_history.update_record(level, self._map_id, steps)
+                message = f"New record for match {self._map_id}: {steps} steps"
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
-        if new_record:
-            self._write_log(f"New record for match {self._map_id}: {steps} steps")
+        if changed:
+            self._write_log(message)
             self._show_map_id()
 
     def open_history(self):
