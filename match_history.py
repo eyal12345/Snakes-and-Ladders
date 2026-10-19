@@ -46,11 +46,12 @@ class MatchHistory:
     RIVAL = "Rival"
     SHARED = "You/Rival"  # both reached the same record
     HOLDERS = (YOU, RIVAL, SHARED)
-    # Records live under RECORDS_KEY. Records saved under the older keys (including the
-    # first "records", which had no tosses or Broken By) are ignored and dropped on the next
-    # write, so every map starts over as Undetermined in both modes.
-    RECORDS_KEY = "records_v2"
-    OLD_RECORD_KEYS = ("record", "best_steps", "records")
+    # Records live under RECORDS_KEY. Records saved under the older keys (including "records"
+    # and "records_v2", from before the steps and tosses records were kept apart) are
+    # ignored and dropped on the next write, so every map starts over as Undetermined in
+    # both modes.
+    RECORDS_KEY = "records_v3"
+    OLD_RECORD_KEYS = ("record", "best_steps", "records", "records_v2")
 
     ID_LENGTH = 6
     ID_ALPHABET = string.ascii_uppercase + string.digits
