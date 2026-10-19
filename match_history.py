@@ -86,6 +86,11 @@ class MatchHistory:
     def contains(self, difficulty, map_id):
         return map_id in self._read(difficulty)
 
+    def record(self, difficulty, map_id):
+        """Return the map's record step count, or None if it was never won or isn't saved."""
+        entry = self._read(difficulty).get(map_id)
+        return self._record_of(entry) if isinstance(entry, dict) else None
+
     # ------------------------------------------------------------------ saving
     def save(self, difficulty, map_id, board):
         """Add a board to its difficulty's reservoir (no-op if the ID is already there)."""

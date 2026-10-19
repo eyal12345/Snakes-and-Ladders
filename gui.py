@@ -139,6 +139,8 @@ class SnakesAndLaddersApp:
         self._roll_button.pack(pady=3)
         self._map_label = tk.Label(panel, text="", fg="#546e7a", font=("Consolas", 10, "bold"))
         self._map_label.pack()
+        self._record_label = tk.Label(panel, text="", fg="#546e7a", font=("Consolas", 10, "bold"))
+        self._record_label.pack()
 
         level_box = tk.LabelFrame(panel, text="Difficulty level", padx=8, pady=4)
         level_box.pack(fill="x", pady=(4, 0))
@@ -615,6 +617,10 @@ class SnakesAndLaddersApp:
         saved = self._match_history.contains(level, self._map_id)
         note = "" if saved else "  (saved on first roll)"
         self._map_label.config(text=f"Match ID: {self._map_id}{note}")
+        record = self._match_history.record(level, self._map_id)
+        self._record_label.config(
+            text="Record: Undetermined" if record is None else f"Record: {record} steps"
+        )
 
     def _save_current_map(self):
         try:
@@ -637,6 +643,7 @@ class SnakesAndLaddersApp:
             return
         if new_record:
             self._write_log(f"New record for match {self._map_id}: {steps} steps")
+            self._show_map_id()
 
     def open_history(self):
         """Let the player pick a saved map of any difficulty level and play it again."""
