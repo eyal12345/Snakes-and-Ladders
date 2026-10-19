@@ -645,16 +645,6 @@ class SnakesAndLaddersApp:
         """True when a record equals the fewest steps the board allows."""
         return record is not None and record.steps == Game.min_steps(board, level)
 
-    @staticmethod
-    def _tosses_text(record):
-        return "-" if record is None or record.tosses is None else str(record.tosses)
-
-    @staticmethod
-    def _is_fewest_tosses(record, board, level):
-        """True when a record's tosses equal the fewest tosses the board allows."""
-        return (record is not None and record.tosses is not None
-                and record.tosses == Game.min_tosses(board, level))
-
     def _save_current_map(self):
         try:
             self._match_history.save(self._game.difficulty, self._map_id, self._game.board)
@@ -683,8 +673,7 @@ class SnakesAndLaddersApp:
             changed = self._match_history.update_record(level, self._map_id, kind, steps,
                                                         tosses, holder)
             record = self._match_history.record(level, self._map_id, kind)
-            message = (f"Records for match {self._map_id}: {self._record_text(record, '')}, "
-                       f"{self._tosses_text(record)} tosses ({record.tosses_holder})")
+            message = f"Record for match {self._map_id}: {self._record_text(record, '')}"
         except MatchHistoryError as error:
             self._write_log(str(error))
             return
@@ -729,10 +718,9 @@ class SnakesAndLaddersApp:
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
         row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}"
-        widths = (11, 11, 8, 10)  # Record, Broken By, Tosses, Broken By
+        widths = (11, 10)  # Record, Broken By
         header = row_format.format("", "ID", "Level", "Created", "Layout")
-        header += f"{'Record':<{widths[0]}}{'Broken By':<{widths[1]}}"
-        header += f"{'Tosses':<{widths[2]}}Broken By"
+        header += f"{'Record':<{widths[0]}}Broken By"
         tk.Label(dialog, text=header,
                  font=("Consolas", 10, "bold"), padx=11, anchor="w").pack(fill="x", pady=(6, 0))
 
@@ -762,20 +750,15 @@ class SnakesAndLaddersApp:
             record_boxes.append(box)
 
         def record_cells(saved):
-            """(text, gold) for the Record, Broken By, Tosses and Broken By columns of a map."""
+            """(text, gold) for the Record and Broken By columns of a map."""
             record = saved.single_record if single else saved.multi_record
             if record is None:
                 return [("-", False)] * len(widths)
             # Singleplayer records saved before they had a holder were always the human's.
             unknown = MatchHistory.YOU if single else "-"
             fewest_steps = self._is_perfect(record, saved.board, saved.difficulty)
-            fewest_tosses = self._is_fewest_tosses(record, saved.board, saved.difficulty)
-            # The holders are gold too when both the steps and the tosses are the best possible.
-            both = fewest_steps and fewest_tosses
             return [(f"{record.steps} steps", fewest_steps),
-                    (record.holder or unknown, both),
-                    (self._tosses_text(record), fewest_tosses),
-                    (record.tosses_holder or unknown, both)]
+                    (record.holder or unknown, fewest_steps)]
         scrollbar.config(command=listbox.yview)
 
         shown = []
@@ -1118,14 +1101,11 @@ class SnakesAndLaddersApp:
 
     def _refresh_player_panel(self):
         steps = {player: 0 for player in self._game.players}
-        tosses = dict(steps)
         for result in self._game.history:
             steps[result.player] += result.steps
-            tosses[result.player] += 1
         for label, player in zip(self._player_labels, self._game.turn_order):
-            count, rolls = steps[player], tosses[player]
-            label.config(text=f"{player.name}: {count} step{'' if count == 1 else 's'} | "
-                              f"{rolls} toss{'' if rolls == 1 else 'es'}")
+            count = steps[player]
+            label.config(text=f"{player.name}: {count} step{'' if count == 1 else 's'}")
 
     # ================================================================== geometry
     def _square_bounds(self, square):
