@@ -671,7 +671,8 @@ class SnakesAndLaddersApp:
             first = winner is self._game.players[0]
             holder = MatchHistory.YOU if first else MatchHistory.RIVAL
             changed = self._match_history.update_record(level, self._map_id, kind, steps,
-                                                        tosses, holder)
+                                                        tosses, holder,
+                                                        len(self._game.players))
             record = self._match_history.record(level, self._map_id, kind)
             message = f"Record for match {self._map_id}: {self._record_text(record, '')}"
         except MatchHistoryError as error:
@@ -718,9 +719,9 @@ class SnakesAndLaddersApp:
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
         row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}"
-        widths = (11, 10)  # Record, Broken By
+        widths = (11, 11, 11)  # Record, Broken By, No. Players
         header = row_format.format("", "ID", "Level", "Created", "Layout")
-        header += f"{'Record':<{widths[0]}}Broken By"
+        header += f"{'Record':<{widths[0]}}{'Broken By':<{widths[1]}}No. Players"
         tk.Label(dialog, text=header,
                  font=("Consolas", 10, "bold"), padx=11, anchor="w").pack(fill="x", pady=(6, 0))
 
@@ -750,7 +751,7 @@ class SnakesAndLaddersApp:
             record_boxes.append(box)
 
         def record_cells(saved):
-            """(text, gold) for the Record and Broken By columns of a map."""
+            """(text, gold) for the Record, Broken By and No. Players columns of a map."""
             record = saved.single_record if single else saved.multi_record
             if record is None:
                 return [("-", False)] * len(widths)
@@ -758,7 +759,8 @@ class SnakesAndLaddersApp:
             unknown = MatchHistory.YOU if single else "-"
             fewest_steps = self._is_perfect(record, saved.board, saved.difficulty)
             return [(f"{record.steps} steps", fewest_steps),
-                    (record.holder or unknown, fewest_steps)]
+                    (record.holder or unknown, fewest_steps),
+                    (f"{record.players} players", fewest_steps)]
         scrollbar.config(command=listbox.yview)
 
         shown = []

@@ -19,6 +19,7 @@ class Record:
     holder: str = ""  # who set the steps record: "You" (the first player), "Rival" or "You/Rival"
     tosses: Optional[int] = None  # fewest dice tosses a winner needed (kept on its own)
     tosses_holder: str = ""       # who set the tosses record
+    players: int = 2  # players in the match that set the steps record (2 for older records)
 
 
 @dataclass(frozen=True)
@@ -129,12 +130,14 @@ class MatchHistory:
         }
         self._write(difficulty, entries, map_id)
 
-    def update_record(self, difficulty, map_id, kind, steps, tosses, holder=""):
+    def update_record(self, difficulty, map_id, kind, steps, tosses, holder="", players=2):
         """Store a winner's step and toss counts where they beat the map's records of that kind.
 
         The steps record and the tosses record are kept apart: each one changes only when
         the win needed fewer of its own count. With a holder, equaling a record set by the
-        other side makes it shared ("You/Rival"). Returns True when either record changed.
+        other side makes it shared ("You/Rival"). `players` is how many played the match; it
+        is kept with the steps record whenever a win sets a new one. Returns True when either
+        record changed.
         """
         entries = self._read(difficulty)
         entry = entries.get(map_id)
@@ -142,19 +145,21 @@ class MatchHistory:
             return False
         record = self._record_of(entry, kind)
         if record is None:
-            new = Record(steps, holder, tosses, holder)
+            new = Record(steps, holder, tosses, holder, players)
         else:
             new_steps, steps_holder = self._best(record.steps, record.holder, steps, holder)
             new_tosses, tosses_holder = self._best(record.tosses, record.tosses_holder,
                                                    tosses, holder)
-            new = Record(new_steps, steps_holder, new_tosses, tosses_holder)
+            new_players = players if steps < record.steps else record.players
+            new = Record(new_steps, steps_holder, new_tosses, tosses_holder, new_players)
             if new == record:
                 return False
         records = entry.get(self.RECORDS_KEY)
         if not isinstance(records, dict):
             records = entry[self.RECORDS_KEY] = {}
         records[kind] = {"steps": new.steps, "holder": new.holder,
-                         "tosses": new.tosses, "tosses_holder": new.tosses_holder}
+                         "tosses": new.tosses, "tosses_holder": new.tosses_holder,
+                         "players": new.players}
         self._write(difficulty, entries, map_id)
         return True
 
@@ -183,8 +188,12 @@ class MatchHistory:
         holder = holder if holder in cls.HOLDERS else ""
         # Records saved before the two were kept apart: the tosses came with the steps record.
         tosses_holder = record.get("tosses_holder", holder)
+        # Records saved before the player count was kept were all set in 2-player matches.
+        players = record.get("players", 2)
+        if not isinstance(players, int) or isinstance(players, bool) or players < 1:
+            players = 2
         return Record(steps, holder, tosses,
-                      tosses_holder if tosses_holder in cls.HOLDERS else "")
+                      tosses_holder if tosses_holder in cls.HOLDERS else "", players)
 
     # ------------------------------------------------------------------ files
     def _path(self, difficulty):
