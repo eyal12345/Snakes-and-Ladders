@@ -1,5 +1,7 @@
 """Game class: rules and turn management."""
 
+import heapq
+
 from board import Board
 from computer_player import ComputerPlayer
 from dice import Dice
@@ -84,6 +86,39 @@ class Game:
     def random_board(difficulty, size=100):
         """Create a random board with the number of snakes/ladders of the given level."""
         return Board.random(size=size, num_snakes=difficulty.snakes, num_ladders=difficulty.ladders)
+
+    @staticmethod
+    def min_steps(board, difficulty, sides=6):
+        """Fewest dice steps (as counted by TurnResult.steps) that can win on this board.
+
+        Snake/ladder jumps are free; the finish rule of the level decides what an
+        overshooting roll costs and where it leaves the token.
+        """
+        size = board.size
+        best = {0: 0}
+        queue = [(0, 0)]
+        while queue:
+            cost, square = heapq.heappop(queue)
+            if square == size:
+                return cost
+            if cost > best.get(square, cost):
+                continue
+            for roll in range(1, sides + 1):
+                target = square + roll
+                if target > size:
+                    if difficulty.finish_rule == FINISH_EXACT:
+                        continue  # the token stays put: no progress
+                    if difficulty.finish_rule == FINISH_ANY:
+                        landed, steps = size, size - square
+                    else:  # bounce back the extra steps
+                        landed, steps = 2 * size - target, roll
+                else:
+                    landed, steps = target, roll
+                end = board.destination(landed)[0]
+                if cost + steps < best.get(end, float("inf")):
+                    best[end] = cost + steps
+                    heapq.heappush(queue, (cost + steps, end))
+        return None  # unreachable (cannot happen on a valid board)
 
     # ------------------------------------------------------------------ names
     @classmethod

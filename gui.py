@@ -21,6 +21,9 @@ class SnakesAndLaddersApp:
     START_STRIP = 50
     ANIMATION_DELAY_MS = 110
     COMPUTER_DELAY_MS = 700
+    RECORD_COLOR = "#546e7a"
+    GOLD = "#b8860b"           # a record equal to the fewest steps the board allows
+    GOLD_SELECTED = "#ffd54f"  # the same on a selected (blue) list row
     DICE_SIZE = 64
     # Player modes: key -> (label, humans, computers). Humans come first, then the AI rivals.
     MODES = {
@@ -139,7 +142,8 @@ class SnakesAndLaddersApp:
         self._roll_button.pack(pady=3)
         self._map_label = tk.Label(panel, text="", fg="#546e7a", font=("Consolas", 10, "bold"))
         self._map_label.pack()
-        self._record_label = tk.Label(panel, text="", fg="#546e7a", font=("Consolas", 10, "bold"))
+        self._record_label = tk.Label(panel, text="", fg=self.RECORD_COLOR,
+                                      font=("Consolas", 10, "bold"))
         self._record_label.pack()
 
         level_box = tk.LabelFrame(panel, text="Difficulty level", padx=8, pady=4)
@@ -618,8 +622,10 @@ class SnakesAndLaddersApp:
         note = "" if saved else "  (saved on first roll)"
         self._map_label.config(text=f"Match ID: {self._map_id}{note}")
         record = self._match_history.record(level, self._map_id)
+        perfect = record is not None and record == Game.min_steps(self._game.board, level)
         self._record_label.config(
-            text="Record: Undetermined" if record is None else f"Record: {record} steps"
+            text="Record: Undetermined" if record is None else f"Record: {record} steps",
+            fg=self.GOLD if perfect else self.RECORD_COLOR,
         )
 
     def _save_current_map(self):
@@ -674,17 +680,30 @@ class SnakesAndLaddersApp:
         query = tk.StringVar()
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
-        row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}{}"
-        tk.Label(dialog, text=row_format.format("", "ID", "Level", "Created", "Layout", "Record"),
-                 font=("Consolas", 10, "bold"), padx=10, anchor="w").pack(fill="x", pady=(6, 0))
+        row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}"
+        tk.Label(dialog, text=row_format.format("", "ID", "Level", "Created", "Layout") + "Record",
+                 font=("Consolas", 10, "bold"), padx=11, anchor="w").pack(fill="x", pady=(6, 0))
 
         list_frame = tk.Frame(dialog, padx=10, pady=2)
         list_frame.pack(fill="both", expand=True)
         scrollbar = tk.Scrollbar(list_frame)
         scrollbar.pack(side="right", fill="y")
-        listbox = tk.Listbox(list_frame, width=72, height=12, font=("Consolas", 10),
-                             yscrollcommand=scrollbar.set, activestyle="dotbox")
+        # The Record column is its own listbox so a record can be colored on its own (gold
+        # when it is the best possible); it scrolls and selects together with the main one.
+        boxes = tk.Frame(list_frame, bd=1, relief="sunken")
+        boxes.pack(side="left", fill="both", expand=True)
+        box_style = {"height": 12, "font": ("Consolas", 10), "bd": 0, "highlightthickness": 0}
+
+        def on_scroll(first, last_visible):
+            scrollbar.set(first, last_visible)
+            records.yview_moveto(first)
+
+        listbox = tk.Listbox(boxes, width=len(row_format.format(*[""] * 5)), activestyle="dotbox",
+                             yscrollcommand=on_scroll, **box_style)
         listbox.pack(side="left", fill="both", expand=True)
+        records = tk.Listbox(boxes, width=10, activestyle="none", exportselection=False,
+                             takefocus=0, **box_style)
+        records.pack(side="left", fill="y")
         scrollbar.config(command=listbox.yview)
 
         shown = []
@@ -694,9 +713,16 @@ class SnakesAndLaddersApp:
         def is_current(index):
             return shown[index].map_id == current_id
 
+        def sync_records(*_args):
+            records.selection_clear(0, tk.END)
+            for index in listbox.curselection():
+                records.selection_set(index)
+            records.yview_moveto(listbox.yview()[0])
+
         def fill_list(*_args):
             text = query.get().strip().upper()
             listbox.delete(0, tk.END)
+            records.delete(0, tk.END)
             shown.clear()
             for saved in maps:
                 if text in saved.map_id:
@@ -706,18 +732,25 @@ class SnakesAndLaddersApp:
                     record = "-" if saved.record_steps is None else f"{saved.record_steps} steps"
                     listbox.insert(tk.END, row_format.format(
                         "►" if current else "", saved.map_id, saved.difficulty.label,
-                        saved.created, f"{layout:<7}(playing)" if current else layout, record
+                        saved.created, f"{layout:<7}(playing)" if current else layout
                     ))
+                    records.insert(tk.END, record)
                     if current:
                         # The match being played cannot be chosen; it is only pointed out.
-                        listbox.itemconfig(tk.END, bg="#c8e6c9", fg="#757575",
+                        for box in (listbox, records):
+                            box.itemconfig(tk.END, bg="#c8e6c9", fg="#757575",
                                            selectbackground="#c8e6c9", selectforeground="#757575")
+                    if saved.record_steps is not None and saved.record_steps == Game.min_steps(
+                        saved.board, saved.difficulty
+                    ):
+                        records.itemconfig(tk.END, fg=self.GOLD, selectforeground=self.GOLD_SELECTED)
             # Start on the first row other than the current match.
             last[0] = next((i for i in range(len(shown)) if not is_current(i)), None)
             if last[0] is not None:
                 listbox.selection_set(last[0])
                 listbox.activate(last[0])
                 listbox.see(last[0])
+            sync_records()
 
         def on_select(_event):
             from_mouse, clicked[0] = clicked[0], False
@@ -766,8 +799,29 @@ class SnakesAndLaddersApp:
         query.trace_add("write", fill_list)
         listbox.bind("<Double-Button-1>", play)
         listbox.bind("<Return>", play)
-        listbox.bind("<<ListboxSelect>>", on_select)
+        listbox.bind("<<ListboxSelect>>", lambda event: (on_select(event), sync_records()))
         listbox.bind("<ButtonPress-1>", lambda _event: clicked.__setitem__(0, True), add="+")
+
+        # Clicks and wheel turns on the Record column act on the main list.
+        def record_click(event):
+            index = records.nearest(event.y)
+            if 0 <= index < len(shown):
+                clicked[0] = True
+                listbox.selection_clear(0, tk.END)
+                listbox.selection_set(index)
+                listbox.activate(index)
+                listbox.focus_set()
+                listbox.event_generate("<<ListboxSelect>>")
+            return "break"
+
+        def record_wheel(event):
+            listbox.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            return "break"
+
+        records.bind("<ButtonPress-1>", record_click)
+        records.bind("<B1-Motion>", lambda _event: "break")
+        records.bind("<Double-Button-1>", lambda event: (play(event), "break")[1])
+        records.bind("<MouseWheel>", record_wheel)
         fill_list()
 
         buttons = tk.Frame(dialog, pady=8)
