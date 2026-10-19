@@ -700,21 +700,28 @@ class SnakesAndLaddersApp:
             self._show_map_id()
 
     def open_history(self):
-        """Let the player pick a saved map of any difficulty level and play it again."""
+        """Let the player pick a saved map of any difficulty level and play it again.
+
+        Singleplayer and multiplayer each get their own History Matches, showing that mode's
+        records: the mode of the match on screen, otherwise the one chosen in Settings.
+        """
         maps = self._match_history.all_maps()
         if not maps:
             messagebox.showinfo(
                 "History matches", "No saved matches yet. Start a match to save it."
             )
             return
+        mode = self._game_mode if self._game is not None else self._mode.get()
+        single = bool(self.MODES[mode][2])
+        mode_name = "Singleplayer" if single else "Multiplayer"
 
         dialog = tk.Toplevel(self._root)
-        dialog.title("History matches")
+        dialog.title(f"History matches - {mode_name}")
         dialog.resizable(False, False)
         dialog.transient(self._root)
         dialog.grab_set()
 
-        tk.Label(dialog, text="All matches, every difficulty level",
+        tk.Label(dialog, text=f"{mode_name} records, all matches of every difficulty level",
                  font=("Helvetica", 10, "bold"), padx=10, pady=6).pack(anchor="w")
         # Opened from the match screen: point out the match being played right now.
         current_id = self._map_id if self._game is not None else None
@@ -729,10 +736,9 @@ class SnakesAndLaddersApp:
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
         row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}"
-        record_width, tosses_width = 23, 8
+        widths = (11, 8, 10)  # Record, Tosses, Broken By
         header = row_format.format("", "ID", "Level", "Created", "Layout")
-        header += f"{'Record (Singleplayer)':<{record_width}}{'Tosses':<{tosses_width}}"
-        header += f"{'Record (Multiplayer)':<{record_width}}Tosses"
+        header += f"{'Record':<{widths[0]}}{'Tosses':<{widths[1]}}Broken By"
         tk.Label(dialog, text=header,
                  font=("Consolas", 10, "bold"), padx=11, anchor="w").pack(fill="x", pady=(6, 0))
 
@@ -740,8 +746,8 @@ class SnakesAndLaddersApp:
         list_frame.pack(fill="both", expand=True)
         scrollbar = tk.Scrollbar(list_frame)
         scrollbar.pack(side="right", fill="y")
-        # Each Record and Tosses column is its own listbox so a value can be colored on its own
-        # (gold when it is the best possible); they scroll and select together with the main one.
+        # Each record column is its own listbox so a value can be colored on its own (gold
+        # when it is the best possible); they scroll and select together with the main one.
         boxes = tk.Frame(list_frame, bd=1, relief="sunken")
         boxes.pack(side="left", fill="both", expand=True)
         box_style = {"height": 12, "font": ("Consolas", 10), "bd": 0, "highlightthickness": 0}
@@ -755,21 +761,24 @@ class SnakesAndLaddersApp:
                              yscrollcommand=on_scroll, **box_style)
         listbox.pack(side="left", fill="both", expand=True)
         record_boxes = []
-        for width in (record_width, tosses_width) * 2:  # singleplayer, then multiplayer
+        for width in widths:
             box = tk.Listbox(boxes, width=width, activestyle="none", exportselection=False,
                              takefocus=0, **box_style)
             box.pack(side="left", fill="y")
             record_boxes.append(box)
 
         def record_cells(saved):
-            """(text, gold) for each Record/Tosses column of a saved map."""
-            cells = []
-            for record in (saved.single_record, saved.multi_record):
-                cells.append((self._record_text(record, "-"),
-                              self._is_perfect(record, saved.board, saved.difficulty)))
-                cells.append((self._tosses_text(record),
-                              self._is_fewest_tosses(record, saved.board, saved.difficulty)))
-            return cells
+            """(text, gold) for the Record, Tosses and Broken By columns of a saved map."""
+            record = saved.single_record if single else saved.multi_record
+            if record is None:
+                return [("-", False)] * 3
+            # Only the human player holds a singleplayer record (an AI win resets it).
+            holder = MatchHistory.YOU if single else record.holder or "-"
+            return [(f"{record.steps} steps",
+                     self._is_perfect(record, saved.board, saved.difficulty)),
+                    (self._tosses_text(record),
+                     self._is_fewest_tosses(record, saved.board, saved.difficulty)),
+                    (holder, False)]
         scrollbar.config(command=listbox.yview)
 
         shown = []
