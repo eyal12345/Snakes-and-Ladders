@@ -624,6 +624,20 @@ class SnakesAndLaddersApp:
             return
         self._show_map_id()
 
+    def _save_record(self, winner):
+        """Keep the winner's step count as this map's record if it is the lowest so far."""
+        steps = sum(r.steps for r in self._game.history if r.player is winner)
+        level = self._game.difficulty
+        if not self._match_history.contains(level, self._map_id):
+            self._save_current_map()
+        try:
+            new_record = self._match_history.update_record(level, self._map_id, steps, winner.name)
+        except MatchHistoryError as error:
+            self._write_log(str(error))
+            return
+        if new_record:
+            self._write_log(f"New record for match {self._map_id}: {steps} steps by {winner.name}")
+
     def open_history(self):
         """Let the player pick a saved map of any difficulty level and play it again."""
         maps = self._match_history.all_maps()
@@ -653,15 +667,15 @@ class SnakesAndLaddersApp:
         query = tk.StringVar()
         tk.Entry(search_row, textvariable=query, width=10).pack(side="left", padx=6)
 
-        row_format = "{:<2}{:<8}{:<8}{:<21}{}"
-        tk.Label(dialog, text=row_format.format("", "ID", "Level", "Created", "Layout"),
+        row_format = "{:<2}{:<8}{:<8}{:<21}{:<18}{}"
+        tk.Label(dialog, text=row_format.format("", "ID", "Level", "Created", "Layout", "Record"),
                  font=("Consolas", 10, "bold"), padx=10, anchor="w").pack(fill="x", pady=(6, 0))
 
         list_frame = tk.Frame(dialog, padx=10, pady=2)
         list_frame.pack(fill="both", expand=True)
         scrollbar = tk.Scrollbar(list_frame)
         scrollbar.pack(side="right", fill="y")
-        listbox = tk.Listbox(list_frame, width=60, height=12, font=("Consolas", 10),
+        listbox = tk.Listbox(list_frame, width=82, height=12, font=("Consolas", 10),
                              yscrollcommand=scrollbar.set, activestyle="dotbox")
         listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=listbox.yview)
@@ -682,9 +696,13 @@ class SnakesAndLaddersApp:
                     shown.append(saved)
                     layout = f"{len(saved.board.snakes)}S/{len(saved.board.ladders)}L"
                     current = saved.map_id == current_id
+                    if saved.record_steps is None:
+                        record = "-"
+                    else:
+                        record = f"{saved.record_steps} ({saved.record_holder[:12]})"
                     listbox.insert(tk.END, row_format.format(
                         "►" if current else "", saved.map_id, saved.difficulty.label,
-                        saved.created, f"{layout:<7}(playing)" if current else layout
+                        saved.created, f"{layout:<7}(playing)" if current else layout, record
                     ))
                     if current:
                         # The match being played cannot be chosen; it is only pointed out.
@@ -777,6 +795,7 @@ class SnakesAndLaddersApp:
         self._refresh_player_panel()
         if result.is_winner:
             self._write_log(f"Winner: {result.player.name}")
+            self._save_record(result.player)
             self._update_status()
             self._roll_button.config(state="disabled")
             self._update_mode_lock()

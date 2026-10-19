@@ -6,6 +6,7 @@ import secrets
 import string
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 from board import Board
 from difficulty import Difficulty
@@ -18,6 +19,8 @@ class SavedMap:
     board: Board
     created: str  # "YYYY-MM-DD HH:MM:SS"
     difficulty: Difficulty
+    record_steps: Optional[int] = None  # fewest steps any winner needed on this map
+    record_holder: str = ""             # name of the player who set that record
 
 
 class MatchHistory:
@@ -71,7 +74,12 @@ class MatchHistory:
                 )
             except (KeyError, TypeError, ValueError, AttributeError, InvalidBoardError):
                 continue  # skip damaged entries instead of failing the whole list
-            saved.append(SavedMap(map_id, board, str(entry.get("created", "")), difficulty))
+            record = entry.get("record")
+            record_steps = record_holder = None
+            if isinstance(record, dict) and isinstance(record.get("steps"), int):
+                record_steps, record_holder = record["steps"], str(record.get("player", ""))
+            saved.append(SavedMap(map_id, board, str(entry.get("created", "")), difficulty,
+                                  record_steps, record_holder or ""))
         saved.sort(key=lambda m: m.created, reverse=True)
         return saved
 
@@ -95,6 +103,33 @@ class MatchHistory:
             "ladders": {str(k): v for k, v in sorted(board.ladders.items())},
             "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
+        self._write(difficulty, entries, map_id)
+
+    def update_record(self, difficulty, map_id, steps, player_name):
+        """Store a winner's step count if it beats the map's record.
+
+        Returns True when a new record was set (including the map's first win).
+        """
+        entries = self._read(difficulty)
+        entry = entries.get(map_id)
+        if not isinstance(entry, dict):
+            return False
+        record = entry.get("record")
+        if isinstance(record, dict) and isinstance(record.get("steps"), int)                 and record["steps"] <= steps:
+            return False
+        entry["record"] = {
+            "steps": steps,
+            "player": player_name,
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        self._write(difficulty, entries, map_id)
+        return True
+
+    # ------------------------------------------------------------------ files
+    def _path(self, difficulty):
+        return os.path.join(self._directory, f"{difficulty.label.lower()}.json")
+
+    def _write(self, difficulty, entries, map_id):
         path = self._path(difficulty)
         try:
             os.makedirs(self._directory, exist_ok=True)
@@ -104,10 +139,6 @@ class MatchHistory:
             os.replace(temp, path)  # atomic: a crash never leaves a half-written reservoir
         except OSError as error:
             raise MatchHistoryError(f"Could not save match {map_id}: {error}") from error
-
-    # ------------------------------------------------------------------ files
-    def _path(self, difficulty):
-        return os.path.join(self._directory, f"{difficulty.label.lower()}.json")
 
     def _read(self, difficulty):
         try:
