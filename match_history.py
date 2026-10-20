@@ -19,7 +19,7 @@ class Record:
     holder: str = ""  # who set the steps record: "You" (the first player), "Rival" or "You/Rival"
     tosses: Optional[int] = None  # fewest dice tosses a winner needed (kept on its own)
     tosses_holder: str = ""       # who set the tosses record
-    players: int = 2  # players in the match that set the steps record (2 for older records)
+    players: int = 2  # most players in any win on the map (2 for older records)
 
 
 @dataclass(frozen=True)
@@ -137,11 +137,12 @@ class MatchHistory:
         the win needed fewer of its own count. With a holder, equaling a tosses record set by
         the other side makes it shared ("You/Rival").
 
-        `players` is how many played the match, and for the steps record it outranks the
-        holder: fewer steps always set a new record (with this match's count, even if lower);
-        the same steps with more players set a new record held by this winner alone; the
-        same steps with the same players make it shared as above; the same steps with fewer
-        players change nothing. Returns True when either record changed.
+        `players` is how many played the match. The record keeps the most players any win on
+        the map had, whatever its steps. For the steps record it outranks the holder: fewer
+        steps always set a new record; the same steps with more players set a new record held
+        by this winner alone; the same steps with the same players make it shared as above;
+        the same steps with fewer players change nothing. Returns True when either record
+        changed.
         """
         entries = self._read(difficulty)
         entry = entries.get(map_id)
@@ -152,12 +153,12 @@ class MatchHistory:
             new = Record(steps, holder, tosses, holder, players)
         else:
             if steps < record.steps or (steps == record.steps and players > record.players):
-                new_steps, steps_holder, new_players = steps, holder, players
+                new_steps, steps_holder = steps, holder
             elif steps == record.steps and players == record.players:
                 new_steps, steps_holder = self._best(record.steps, record.holder, steps, holder)
-                new_players = players
             else:
-                new_steps, steps_holder, new_players = record.steps, record.holder, record.players
+                new_steps, steps_holder = record.steps, record.holder
+            new_players = max(record.players, players)
             new_tosses, tosses_holder = self._best(record.tosses, record.tosses_holder,
                                                    tosses, holder)
             new = Record(new_steps, steps_holder, new_tosses, tosses_holder, new_players)
