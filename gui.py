@@ -637,8 +637,9 @@ class SnakesAndLaddersApp:
     def _record_text(record, undetermined):
         if record is None:
             return undetermined
-        text = f"{record.steps} steps"
-        return f"{text} ({record.holder})" if record.holder else text
+        players = f"{record.players} Players"
+        detail = f"{record.holder}/{players}" if record.holder else players
+        return f"{record.steps} steps ({detail})"
 
     @staticmethod
     def _is_perfect(record, board, level):
