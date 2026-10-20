@@ -134,10 +134,14 @@ class MatchHistory:
         """Store a winner's step and toss counts where they beat the map's records of that kind.
 
         The steps record and the tosses record are kept apart: each one changes only when
-        the win needed fewer of its own count. With a holder, equaling a record set by the
-        other side makes it shared ("You/Rival"). `players` is how many played the match: a
-        new steps record takes this match's count (even if lower), and equaling the steps
-        record keeps the higher of the two counts. Returns True when either record changed.
+        the win needed fewer of its own count. With a holder, equaling a tosses record set by
+        the other side makes it shared ("You/Rival").
+
+        `players` is how many played the match, and for the steps record it outranks the
+        holder: fewer steps always set a new record (with this match's count, even if lower);
+        the same steps with more players set a new record held by this winner alone; the
+        same steps with the same players make it shared as above; the same steps with fewer
+        players change nothing. Returns True when either record changed.
         """
         entries = self._read(difficulty)
         entry = entries.get(map_id)
@@ -147,15 +151,15 @@ class MatchHistory:
         if record is None:
             new = Record(steps, holder, tosses, holder, players)
         else:
-            new_steps, steps_holder = self._best(record.steps, record.holder, steps, holder)
+            if steps < record.steps or (steps == record.steps and players > record.players):
+                new_steps, steps_holder, new_players = steps, holder, players
+            elif steps == record.steps and players == record.players:
+                new_steps, steps_holder = self._best(record.steps, record.holder, steps, holder)
+                new_players = players
+            else:
+                new_steps, steps_holder, new_players = record.steps, record.holder, record.players
             new_tosses, tosses_holder = self._best(record.tosses, record.tosses_holder,
                                                    tosses, holder)
-            if steps < record.steps:
-                new_players = players
-            elif steps == record.steps:
-                new_players = max(players, record.players)
-            else:
-                new_players = record.players
             new = Record(new_steps, steps_holder, new_tosses, tosses_holder, new_players)
             if new == record:
                 return False
