@@ -965,7 +965,8 @@ class SnakesAndLaddersApp:
         else:
             player = self._game.current_player
             text = f"Turn: {player.name}"
-        self._status.config(text=text, bg=Game.color_code(player.color), fg="black", padx=8)
+        fg = "white" if player.color in Game.DARK_COLORS else "black"
+        self._status.config(text=text, bg=Game.color_code(player.color), fg=fg, padx=8)
 
     def _write_log(self, message):
         self._log.insert(tk.END, message)
