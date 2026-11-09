@@ -1050,7 +1050,8 @@ class SnakesAndLaddersApp:
     def _paint_color_menus(self):
         for menu, var in zip(self._color_menus, self._color_vars):
             code = Game.color_code(var.get())
-            menu.config(bg=code, activebackground=code)
+            fg = "white" if var.get() in Game.DARK_COLORS else "black"
+            menu.config(bg=code, activebackground=code, fg=fg, activeforeground=fg)
 
     def _on_color_changed(self, index):
         """Keep colors unique by swapping with whoever had the chosen color, then apply."""
