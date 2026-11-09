@@ -46,7 +46,7 @@ class Game:
         "Gray": "#9e9e9e",
     }
     # Colors dark enough to need light text drawn over them.
-    DARK_COLORS = {"Black", "Brown", "Gray"}
+    DARK_COLORS = {"Black", "Brown"}
 
     def __init__(self, num_players, board=None, dice=None, player_names=None,
                  player_colors=None, computer_players=None, difficulty=Difficulty.MEDIUM):
