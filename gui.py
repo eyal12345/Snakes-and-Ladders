@@ -513,12 +513,14 @@ class SnakesAndLaddersApp:
                 winner = toss.winner
                 you = winner.name.casefold() == "you"
                 status.config(text="You start!" if you else f"{winner.name} starts!",
-                              bg=Game.color_code(winner.color))
+                              bg=Game.color_code(winner.color),
+                              fg="white" if winner.color in Game.DARK_COLORS else "black")
                 button.config(text="Start Match", bg="#c8e6c9", state="normal", command=finish)
                 return
             round_label.config(text=f"Round {toss.round}")
             player = toss.next_player
-            status.config(text=f"Toss: {player.name}", bg=Game.color_code(player.color))
+            status.config(text=f"Toss: {player.name}", bg=Game.color_code(player.color),
+                          fg="white" if player.color in Game.DARK_COLORS else "black")
             if player.is_computer:
                 button.config(state="disabled")
                 pending[0] = dialog.after(self.COMPUTER_DELAY_MS, lambda: roll(by_computer=True))
